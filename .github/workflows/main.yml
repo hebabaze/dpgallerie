@@ -1,0 +1,60 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Checkout the repository
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Step 2: Set up Python
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    # Step 3: Install dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Step 4: Set up Java and Android SDK (for Buildozer)
+    - name: Set up Android environment
+      run: |
+        sudo apt update
+        sudo apt install -y openjdk-11-jdk unzip
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmd-tools.zip
+        mkdir -p $HOME/cmdline-tools
+        unzip cmd-tools.zip -d $HOME/cmdline-tools
+        export ANDROID_HOME=$HOME/android-sdk
+        mkdir -p $ANDROID_HOME/cmdline-tools
+        mv $HOME/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-31" "build-tools;31.0.0"
+
+    # Step 5: Install Buildozer
+    - name: Install Buildozer
+      run: |
+        pip install buildozer
+        buildozer init
+
+    # Step 6: Build the APK
+    - name: Build APK
+      run: |
+        buildozer android debug
+
+    # Step 7: Upload the APK as an artifact
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: app-debug.apk
+        path: bin/android/debug/*.apk
