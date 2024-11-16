@@ -1,4 +1,4 @@
-name: Build APK
+name: Build Flet APK
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  build-apk:
+  build-flet-apk:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,17 +21,26 @@ jobs:
       with:
         python-version: '3.12'
 
-    # Step 3: Install dependencies
-    - name: Install dependencies
+    # Step 3: Install Flet CLI and dependencies
+    - name: Install Flet CLI and dependencies
       run: |
         python -m pip install --upgrade pip
+        pip install flet
         pip install -r requirements.txt
+        flet pack init
 
-    # Step 4: Set up Android environment
-    - name: Set up Android environment
+    # Step 4: Install Flutter and Android SDK
+    - name: Install Flutter and Android SDK
       run: |
+        # Install dependencies
         sudo apt update
-        sudo apt install -y openjdk-11-jdk unzip wget
+        sudo apt install -y curl unzip openjdk-11-jdk wget
+        # Download and install Flutter
+        curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.13.5-stable.tar.xz
+        tar xf flutter_linux_3.13.5-stable.tar.xz
+        export PATH=$PWD/flutter/bin:$PATH
+        flutter --version
+        # Install Android SDK and Command Line Tools
         wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmd-tools.zip
         mkdir -p $HOME/android-sdk/cmdline-tools
         unzip cmd-tools.zip -d $HOME/android-sdk/cmdline-tools
@@ -41,20 +50,16 @@ jobs:
         yes | sdkmanager --licenses
         sdkmanager "platform-tools" "platforms;android-31" "build-tools;31.0.0"
 
-    # Step 5: Install Buildozer
-    - name: Install Buildozer
+    # Step 5: Build APK
+    - name: Build Flet APK
       run: |
-        pip install buildozer
-        buildozer init
+        export PATH=$PWD/flutter/bin:$PATH
+        flutter pub get
+        flet pack android
 
-    # Step 6: Build the APK
-    - name: Build APK
-      run: |
-        buildozer android debug
-
-    # Step 7: Upload the APK as an artifact
+    # Step 6: Upload APK as an artifact
     - name: Upload APK
       uses: actions/upload-artifact@v3
       with:
-        name: app-debug.apk
-        path: bin/android/debug/*.apk
+        name: app.apk
+        path: build/app/outputs/flutter-apk/app-release.apk
