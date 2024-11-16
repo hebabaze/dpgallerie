@@ -1,0 +1,83 @@
+name: APK Build and Optimization
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+env:
+  BUILD_NUMBER: 1
+  BUILD_VERSION: 1.0.0
+  PYTHON_VERSION: 3.12.2
+  FLUTTER_VERSION: 3.24.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Checkout the repository
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Step 2: Setup Python
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    # Step 3: Install Python dependencies and Flet
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flet
+
+    # Step 4: Setup Flutter
+    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+
+    # Step 5: Setup Java JDK for Android builds
+    - name: Setup Java JDK
+      uses: actions/setup-java@v4.2.1
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    # Step 6: Build APK with Optimization
+    - name: Build APK with Optimization
+      run: |
+        flutter config --no-analytics
+        
+        # Build APK with shrinking and optimization
+        flet pack android --build-name ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }}
+        
+        # Build with split-per-abi for smaller APKs
+        flutter build apk --release --split-per-abi --shrink
+
+        # Align the APK for optimization
+        mkdir -p compressed-apks
+        zipalign -v -p 4 build/app/outputs/flutter-apk/app-arm64-v8a-release.apk compressed-apks/app-arm64-v8a-aligned.apk
+        zipalign -v -p 4 build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk compressed-apks/app-armeabi-v7a-aligned.apk
+        zipalign -v -p 4 build/app/outputs/flutter-apk/app-x86_64-release.apk compressed-apks/app-x86_64-aligned.apk
+
+        # Optional: Verify alignment
+        zipalign -c 4 compressed-apks/app-arm64-v8a-aligned.apk
+        zipalign -c 4 compressed-apks/app-armeabi-v7a-aligned.apk
+        zipalign -c 4 compressed-apks/app-x86_64-aligned.apk
+
+    # Step 7: Upload Optimized APK Artifacts
+    - name: Upload APK Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: apk-build-artifact
+        path: compressed-apks/ # Path for optimized APKs
+        if-no-files-found: error
